@@ -26,7 +26,7 @@ python scripts/enrich_osv_recidivism.py \
 This script:
 - downloads the OSV dump (`OSV-all.zip` by default),
 - extracts all vulnerabilities,
-- computes a recidivism metric using CWE recurrence and repository/fix history,
+- stores a recidivism placeholder marker for each vulnerability,
 - appends recidivism details to each vulnerability and writes JSONL output.
 
 ### 2) Clone OSV referenced repositories

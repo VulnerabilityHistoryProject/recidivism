@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 from urllib.request import urlretrieve
 
-from osv_common import collect_history, iter_vulnerability_files, load_vulnerability, recidivism_for_vulnerability
+from osv_common import extract_cwes, extract_fix_commits, extract_repo_urls, iter_vulnerability_files, load_vulnerability
 from recidivism_config import get_required_value, load_config_with_source, resolve_config_path
 
 
@@ -65,29 +65,29 @@ def main() -> None:
     extract_dump(archive_path, extract_dir, args.force_extract)
 
     vulnerability_files = list(iter_vulnerability_files(extract_dir))
-    cwe_counts, repo_counts = collect_history(load_vulnerability(path) for path in vulnerability_files)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     enriched_count = 0
     with output_path.open("w", encoding="utf-8") as handle:
         for path in vulnerability_files:
             vulnerability = load_vulnerability(path)
-            metric = recidivism_for_vulnerability(vulnerability, cwe_counts, repo_counts)
+            metric = {
+                "status": "placeholder",
+                "notes": "Recidivism scoring is not yet implemented.",
+                "cwes": sorted(extract_cwes(vulnerability)),
+                "repositories": sorted(extract_repo_urls(vulnerability)),
+                "fix_commits": sorted(extract_fix_commits(vulnerability)),
+            }
             dbs = vulnerability.setdefault("database_specific", {})
             if "recidivism" in dbs:
                 print(f"Overwriting existing recidivism metric for vulnerability {vulnerability.get('id', 'UNKNOWN')}")
             dbs["recidivism"] = metric
 
-            severity = [
+            vulnerability["severity"] = [
                 item
                 for item in vulnerability.setdefault("severity", [])
                 if item.get("type") not in {"RECIDIVISM", "RECIDIVISM_ADJUSTED"}
             ]
-            severity.append({"type": "RECIDIVISM", "score": f"{metric['score']:.2f}"})
-            adjusted = metric["adjusted_severity_score"]
-            if adjusted is not None:
-                severity.append({"type": "RECIDIVISM_ADJUSTED", "score": f"{adjusted:.2f}"})
-            vulnerability["severity"] = severity
 
             handle.write(json.dumps(vulnerability, sort_keys=True))
             handle.write("\n")
