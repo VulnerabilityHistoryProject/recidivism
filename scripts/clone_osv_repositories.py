@@ -13,9 +13,10 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
     if len(parts) < 2:
         print(f"Warning: skipping malformed repository URL: {repo_url}")
         return
+    owner = parts[-2]
     repo_name = parts[-1][:-4] if parts[-1].endswith(".git") else parts[-1]
-
-    destination = target_dir / repo_name
+    destination = target_dir / owner / repo_name
+    destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         if update_existing:
             result = subprocess.run(
