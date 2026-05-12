@@ -65,11 +65,12 @@ def resolve_config_path(path_value: str) -> Path:
     return (REPO_ROOT / path).resolve()
 
 
-def required_value(config: configparser.SectionProxy, key: str) -> str:
+def get_required_value(config: configparser.SectionProxy, section: str, key: str) -> str:
     """Return a required non-empty configuration value.
 
     Args:
         config: Configuration section containing script settings.
+        section: Section name for diagnostics.
         key: Config key to read.
 
     Returns:
@@ -78,7 +79,7 @@ def required_value(config: configparser.SectionProxy, key: str) -> str:
     Raises:
         ValueError: If the key is missing or empty.
     """
-    value = config.get(key)
+    value = config.get(key, fallback=None)
     if value is None or not value.strip():
-        raise ValueError(f"Missing required config key '{key}' in section [{config.name}].")
+        raise ValueError(f"Missing required config key '{key}' in section [{section}].")
     return value
