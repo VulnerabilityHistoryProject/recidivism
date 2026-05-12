@@ -2,25 +2,42 @@
 import argparse
 import subprocess
 from pathlib import Path
+from urllib.parse import urlparse
 
 from osv_common import extract_repo_urls, iter_vulnerability_files, load_vulnerability
 
 
 def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> None:
-    repo_name = repo_url.rstrip("/").split("/")[-1]
-    if repo_name.endswith(".git"):
-        repo_name = repo_name[:-4]
+    parsed = urlparse(repo_url)
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 2:
+        print(f"Warning: skipping malformed repository URL: {repo_url}")
+        return
+    repo_name = parts[-1][:-4] if parts[-1].endswith(".git") else parts[-1]
 
     destination = target_dir / repo_name
     if destination.exists():
         if update_existing:
-            subprocess.run(
+            result = subprocess.run(
                 ["git", "-C", str(destination), "pull", "--ff-only"],
                 check=False,
+                capture_output=True,
+                text=True,
             )
+            if result.returncode != 0:
+                stderr = result.stderr.strip() if result.stderr else f"git pull exited with code {result.returncode}"
+                print(f"Warning: failed to update {destination} ({repo_url}): {stderr}")
         return
 
-    subprocess.run(["git", "clone", repo_url, str(destination)], check=False)
+    result = subprocess.run(
+        ["git", "clone", repo_url, str(destination)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.strip() if result.stderr else f"git clone exited with code {result.returncode}"
+        print(f"Warning: failed to clone {repo_url}: {stderr}")
 
 
 def main() -> None:

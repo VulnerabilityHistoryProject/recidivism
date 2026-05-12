@@ -9,6 +9,7 @@ _CWE_RE = re.compile(r"CWE-\d+")
 _COMMIT_RE = re.compile(r"/commit/([0-9a-fA-F]{7,40})")
 _GITHUB_REPO_RE = re.compile(r"^/([^/]+)/([^/]+)")
 _HEX_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+MAX_SEVERITY_SCORE = 10.0
 
 
 def iter_vulnerability_files(root: Path) -> Iterator[Path]:
@@ -91,6 +92,8 @@ def extract_fix_commits(vulnerability: Dict) -> Set[str]:
 
 def parse_base_severity(vulnerability: Dict) -> Optional[float]:
     for severity in vulnerability.get("severity", []):
+        if severity.get("type") in {"RECIDIVISM", "RECIDIVISM_ADJUSTED"}:
+            continue
         score = severity.get("score")
         if isinstance(score, str):
             try:
@@ -129,7 +132,11 @@ def recidivism_for_vulnerability(
 
     recidivism_score = float(cwe_repeat_count + repo_repeat_count)
     base_score = parse_base_severity(vulnerability)
-    adjusted_score = min(base_score + recidivism_score, 10.0) if base_score is not None else None
+    adjusted_score = (
+        max(0.0, min(MAX_SEVERITY_SCORE, base_score + recidivism_score))
+        if base_score is not None
+        else None
+    )
 
     return {
         "cwes": sorted(cwes),
