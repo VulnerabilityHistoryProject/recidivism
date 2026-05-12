@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.request import urlretrieve
 
 from osv_common import collect_history, iter_vulnerability_files, load_vulnerability, recidivism_for_vulnerability
+from recidivism_config import load_config, resolve_config_path
 
 
 def download_dump(url: str, destination: Path, force: bool) -> None:
@@ -33,18 +34,28 @@ def extract_dump(archive: Path, extract_dir: Path, force: bool) -> None:
 
 
 def main() -> None:
+    config = load_config("enrich")
+
     parser = argparse.ArgumentParser(description="Download OSV dump and enrich with recidivism metrics.")
-    parser.add_argument("--dump-url", default="https://osv-vulnerabilities.storage.googleapis.com/OSV-all.zip")
-    parser.add_argument("--archive-path", default="data/OSV-all.zip")
-    parser.add_argument("--extract-dir", default="data/osv_dump")
-    parser.add_argument("--output", default="data/osv_recidivism.jsonl")
-    parser.add_argument("--force-download", action="store_true")
-    parser.add_argument("--force-extract", action="store_true")
+    parser.add_argument("--dump-url", default=config.get("dump_url"))
+    parser.add_argument("--archive-path", default=config.get("archive_path"))
+    parser.add_argument("--extract-dir", default=config.get("extract_dir"))
+    parser.add_argument("--output", default=config.get("output"))
+    parser.add_argument(
+        "--force-download",
+        action=argparse.BooleanOptionalAction,
+        default=config.getboolean("force_download", fallback=False),
+    )
+    parser.add_argument(
+        "--force-extract",
+        action=argparse.BooleanOptionalAction,
+        default=config.getboolean("force_extract", fallback=False),
+    )
     args = parser.parse_args()
 
-    archive_path = Path(args.archive_path).resolve()
-    extract_dir = Path(args.extract_dir).resolve()
-    output_path = Path(args.output).resolve()
+    archive_path = resolve_config_path(args.archive_path)
+    extract_dir = resolve_config_path(args.extract_dir)
+    output_path = resolve_config_path(args.output)
 
     download_dump(args.dump_url, archive_path, args.force_download)
     extract_dump(archive_path, extract_dir, args.force_extract)

@@ -3,6 +3,17 @@
 Utilities for downloading OSV data, enriching vulnerabilities with a recidivism
 metric, and cloning referenced source repositories locally.
 
+## Configuration
+
+Copy the default config and edit your local paths:
+
+```bash
+cp recidivism.default.ini recidivism.ini
+```
+
+Both scripts read settings from `recidivism.ini`. If that file is missing, the
+scripts print guidance and fall back to `recidivism.default.ini`.
+
 ## Scripts
 
 ### 1) Download + enrich OSV vulnerabilities
