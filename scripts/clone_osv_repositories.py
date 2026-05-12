@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from osv_common import extract_repo_urls, iter_vulnerability_files, load_vulnerability
-from recidivism_config import load_config, resolve_config_path
+from recidivism_config import load_config_with_source, required_value, resolve_config_path
 
 
 def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> None:
@@ -43,24 +43,16 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
 
 
 def main() -> None:
-    config = load_config("clone")
+    config, config_source = load_config_with_source("clone")
 
     parser = argparse.ArgumentParser(description="Clone all repositories referenced by OSV vulnerabilities.")
-    parser.add_argument(
-        "--osv-dir",
-        default=config.get("osv_dir"),
-        help="Directory containing extracted OSV JSON files",
-    )
-    parser.add_argument(
-        "--target-dir",
-        default=config.get("target_dir"),
-        help="Directory to place local repository clones",
-    )
-    max_repos = config.get("max_repos", fallback="").strip()
+    parser.add_argument("--osv-dir", help="Directory containing extracted OSV JSON files")
+    parser.add_argument("--target-dir", help="Directory to place local repository clones")
+    max_repos_str = config.get("max_repos", fallback="").strip()
     parser.add_argument(
         "--max-repos",
         type=int,
-        default=int(max_repos) if max_repos else None,
+        default=int(max_repos_str) if max_repos_str else None,
         help="Optional limit for number of repositories",
     )
     parser.add_argument(
@@ -71,8 +63,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    osv_dir = resolve_config_path(args.osv_dir)
-    target_dir = resolve_config_path(args.target_dir)
+    try:
+        osv_dir = resolve_config_path(args.osv_dir or required_value(config, "osv_dir"))
+        target_dir = resolve_config_path(args.target_dir or required_value(config, "target_dir"))
+    except ValueError as error:
+        parser.error(f"{error} (config: {config_source})")
     target_dir.mkdir(parents=True, exist_ok=True)
 
     repo_urls = set()

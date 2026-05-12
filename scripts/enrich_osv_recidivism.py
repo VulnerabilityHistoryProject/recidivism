@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.request import urlretrieve
 
 from osv_common import collect_history, iter_vulnerability_files, load_vulnerability, recidivism_for_vulnerability
-from recidivism_config import load_config, resolve_config_path
+from recidivism_config import load_config_with_source, required_value, resolve_config_path
 
 
 def download_dump(url: str, destination: Path, force: bool) -> None:
@@ -34,13 +34,13 @@ def extract_dump(archive: Path, extract_dir: Path, force: bool) -> None:
 
 
 def main() -> None:
-    config = load_config("enrich")
+    config, config_source = load_config_with_source("enrich")
 
     parser = argparse.ArgumentParser(description="Download OSV dump and enrich with recidivism metrics.")
-    parser.add_argument("--dump-url", default=config.get("dump_url"))
-    parser.add_argument("--archive-path", default=config.get("archive_path"))
-    parser.add_argument("--extract-dir", default=config.get("extract_dir"))
-    parser.add_argument("--output", default=config.get("output"))
+    parser.add_argument("--dump-url")
+    parser.add_argument("--archive-path")
+    parser.add_argument("--extract-dir")
+    parser.add_argument("--output")
     parser.add_argument(
         "--force-download",
         action=argparse.BooleanOptionalAction,
@@ -53,11 +53,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    archive_path = resolve_config_path(args.archive_path)
-    extract_dir = resolve_config_path(args.extract_dir)
-    output_path = resolve_config_path(args.output)
+    try:
+        dump_url = args.dump_url or required_value(config, "dump_url")
+        archive_path = resolve_config_path(args.archive_path or required_value(config, "archive_path"))
+        extract_dir = resolve_config_path(args.extract_dir or required_value(config, "extract_dir"))
+        output_path = resolve_config_path(args.output or required_value(config, "output"))
+    except ValueError as error:
+        parser.error(f"{error} (config: {config_source})")
 
-    download_dump(args.dump_url, archive_path, args.force_download)
+    download_dump(dump_url, archive_path, args.force_download)
     extract_dump(archive_path, extract_dir, args.force_extract)
 
     vulnerability_files = list(iter_vulnerability_files(extract_dir))

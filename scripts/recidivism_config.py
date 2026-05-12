@@ -7,11 +7,22 @@ LOCAL_CONFIG_FILE = REPO_ROOT / "recidivism.ini"
 DEFAULT_CONFIG_FILE = REPO_ROOT / "recidivism.default.ini"
 
 
-def load_config(section: str) -> configparser.SectionProxy:
+def load_config_with_source(section: str) -> tuple[configparser.SectionProxy, Path]:
+    """Load configuration for a script section.
+
+    Reads `recidivism.ini` from the repository root when present. If it is
+    missing, prints local setup guidance and falls back to
+    `recidivism.default.ini`. Raises KeyError when the requested section is not
+    defined.
+
+    Returns:
+        Tuple of the requested section proxy and the config file path used.
+    """
     config = configparser.ConfigParser()
 
     if LOCAL_CONFIG_FILE.exists():
-        config.read(LOCAL_CONFIG_FILE, encoding="utf-8")
+        source = LOCAL_CONFIG_FILE
+        config.read(source, encoding="utf-8")
     else:
         print(
             "Missing recidivism.ini. Copy recidivism.default.ini to recidivism.ini "
@@ -21,16 +32,53 @@ def load_config(section: str) -> configparser.SectionProxy:
             raise FileNotFoundError(
                 f"Could not find {LOCAL_CONFIG_FILE} or fallback {DEFAULT_CONFIG_FILE}."
             )
-        config.read(DEFAULT_CONFIG_FILE, encoding="utf-8")
+        source = DEFAULT_CONFIG_FILE
+        config.read(source, encoding="utf-8")
 
     if section not in config:
         raise KeyError(f"Missing [{section}] section in configuration file.")
 
-    return config[section]
+    return config[section], source
+
+
+def load_config(section: str) -> configparser.SectionProxy:
+    """Backwards-compatible section-only loader."""
+    config_section, _ = load_config_with_source(section)
+    return config_section
 
 
 def resolve_config_path(path_value: str) -> Path:
+    """Resolve a configured path value.
+
+    Absolute paths are normalized directly. Relative paths are interpreted
+    relative to the repository root.
+
+    Args:
+        path_value: Path string from configuration or CLI.
+
+    Returns:
+        Fully resolved filesystem path.
+    """
     path = Path(path_value)
     if path.is_absolute():
         return path.resolve()
     return (REPO_ROOT / path).resolve()
+
+
+def required_value(config: configparser.SectionProxy, key: str) -> str:
+    """Return a required non-empty configuration value.
+
+    Args:
+        config: Configuration section containing script settings.
+        key: Config key to read.
+
+    Returns:
+        Non-empty configuration value.
+
+    Raises:
+        ValueError: If the key is missing or empty.
+    """
+    value = config.get(key)
+    if value is None or not value.strip():
+        raise ValueError(f"Missing required config key '{key}' in section [{config.name}].")
+    return value
