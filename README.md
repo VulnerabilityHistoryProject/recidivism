@@ -28,4 +28,5 @@ python scripts/clone_osv_repositories.py \
 ```
 
 This script scans OSV vulnerabilities for GitHub source references and
-clones/updates local copies for research workflows.
+clones/updates local copies for research workflows (organized as
+`<target-dir>/<owner>/<repo>`).
