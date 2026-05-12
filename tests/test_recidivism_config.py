@@ -8,11 +8,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "scripts")))
 
-from recidivism_config import required_value, load_config, resolve_config_path  # noqa: E402
+from recidivism_config import get_required_value, load_config, resolve_config_path  # noqa: E402
 
 
 class RecidivismConfigTests(unittest.TestCase):
-    def test_loads_default_and_prints_message_when_local_missing(self) -> None:
+    def test_fallback_to_default_when_local_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             default_config = tmp_path / "recidivism.default.ini"
@@ -43,7 +43,7 @@ class RecidivismConfigTests(unittest.TestCase):
             with patch("recidivism_config.LOCAL_CONFIG_FILE", config_path):
                 section = load_config("clone")
             with self.assertRaises(ValueError):
-                required_value(section, "osv_dir")
+                get_required_value(section, "clone", "osv_dir")
 
 
 if __name__ == "__main__":

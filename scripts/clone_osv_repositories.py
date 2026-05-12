@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from osv_common import extract_repo_urls, iter_vulnerability_files, load_vulnerability
-from recidivism_config import load_config_with_source, required_value, resolve_config_path
+from recidivism_config import get_required_value, load_config_with_source, resolve_config_path
 
 
 def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> None:
@@ -46,13 +46,18 @@ def main() -> None:
     config, config_source = load_config_with_source("clone")
 
     parser = argparse.ArgumentParser(description="Clone all repositories referenced by OSV vulnerabilities.")
-    parser.add_argument("--osv-dir", help="Directory containing extracted OSV JSON files")
-    parser.add_argument("--target-dir", help="Directory to place local repository clones")
-    max_repos_str = config.get("max_repos", fallback="").strip()
+    parser.add_argument(
+        "--osv-dir",
+        help="Directory containing extracted OSV JSON files (overrides clone.osv_dir in recidivism.ini)",
+    )
+    parser.add_argument(
+        "--target-dir",
+        help="Directory to place local repository clones (overrides clone.target_dir in recidivism.ini)",
+    )
     parser.add_argument(
         "--max-repos",
         type=int,
-        default=int(max_repos_str) if max_repos_str else None,
+        default=None,
         help="Optional limit for number of repositories",
     )
     parser.add_argument(
@@ -64,10 +69,18 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        osv_dir = resolve_config_path(args.osv_dir or required_value(config, "osv_dir"))
-        target_dir = resolve_config_path(args.target_dir or required_value(config, "target_dir"))
+        osv_dir = resolve_config_path(args.osv_dir or get_required_value(config, "clone", "osv_dir"))
+        target_dir = resolve_config_path(args.target_dir or get_required_value(config, "clone", "target_dir"))
     except ValueError as error:
         parser.error(f"{error} (config: {config_source})")
+    max_repos = args.max_repos
+    if max_repos is None:
+        max_repos_str = config.get("max_repos", fallback="").strip()
+        if max_repos_str:
+            try:
+                max_repos = int(max_repos_str)
+            except ValueError as error:
+                parser.error(f"Invalid clone.max_repos value '{max_repos_str}' in {config_source}: {error}")
     target_dir.mkdir(parents=True, exist_ok=True)
 
     repo_urls = set()
@@ -76,8 +89,8 @@ def main() -> None:
         repo_urls.update(extract_repo_urls(vulnerability))
 
     ordered_repos = sorted(repo_urls)
-    if args.max_repos is not None:
-        ordered_repos = ordered_repos[: args.max_repos]
+    if max_repos is not None:
+        ordered_repos = ordered_repos[:max_repos]
 
     for repo_url in ordered_repos:
         clone_or_update(repo_url, target_dir, args.update_existing)
