@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from osv_common import extract_repo_urls, iter_vulnerability_files, load_vulnerability
+from recidivism_config import load_config, resolve_config_path
 
 
 def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> None:
@@ -42,15 +43,36 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
 
 
 def main() -> None:
+    config = load_config("clone")
+
     parser = argparse.ArgumentParser(description="Clone all repositories referenced by OSV vulnerabilities.")
-    parser.add_argument("--osv-dir", default="data/osv_dump", help="Directory containing extracted OSV JSON files")
-    parser.add_argument("--target-dir", default="data/repos", help="Directory to place local repository clones")
-    parser.add_argument("--max-repos", type=int, default=None, help="Optional limit for number of repositories")
-    parser.add_argument("--update-existing", action="store_true", help="Run git pull on existing clones")
+    parser.add_argument(
+        "--osv-dir",
+        default=config.get("osv_dir"),
+        help="Directory containing extracted OSV JSON files",
+    )
+    parser.add_argument(
+        "--target-dir",
+        default=config.get("target_dir"),
+        help="Directory to place local repository clones",
+    )
+    max_repos = config.get("max_repos", fallback="").strip()
+    parser.add_argument(
+        "--max-repos",
+        type=int,
+        default=int(max_repos) if max_repos else None,
+        help="Optional limit for number of repositories",
+    )
+    parser.add_argument(
+        "--update-existing",
+        action=argparse.BooleanOptionalAction,
+        default=config.getboolean("update_existing", fallback=False),
+        help="Run git pull on existing clones",
+    )
     args = parser.parse_args()
 
-    osv_dir = Path(args.osv_dir).resolve()
-    target_dir = Path(args.target_dir).resolve()
+    osv_dir = resolve_config_path(args.osv_dir)
+    target_dir = resolve_config_path(args.target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
 
     repo_urls = set()
