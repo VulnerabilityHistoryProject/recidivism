@@ -54,6 +54,29 @@ class OsvCommonTests(unittest.TestCase):
         self.assertEqual(metric["score"], 2.0)
         self.assertEqual(metric["adjusted_severity_score"], 9.5)
 
+    def test_adjusted_severity_is_lower_bounded(self) -> None:
+        vulnerability = {
+            "id": "NEG",
+            "database_specific": {"cwe_ids": []},
+            "severity": [{"type": "CUSTOM", "score": "-2.0"}],
+            "references": [],
+        }
+        metric = recidivism_for_vulnerability(vulnerability, {}, {})
+        self.assertEqual(metric["adjusted_severity_score"], 0.0)
+
+    def test_existing_recidivism_severity_is_ignored_for_base_score(self) -> None:
+        vulnerability = {
+            "id": "EXISTING",
+            "database_specific": {"cwe_ids": []},
+            "severity": [
+                {"type": "RECIDIVISM", "score": "1.0"},
+                {"type": "CVSS_V3", "score": "5.0"},
+            ],
+            "references": [],
+        }
+        metric = recidivism_for_vulnerability(vulnerability, {}, {})
+        self.assertEqual(metric["base_severity_score"], 5.0)
+
 
 if __name__ == "__main__":
     unittest.main()

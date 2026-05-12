@@ -50,26 +50,35 @@ def main() -> None:
     extract_dump(archive_path, extract_dir, args.force_extract)
 
     vulnerability_files = list(iter_vulnerability_files(extract_dir))
-    vulnerabilities = [load_vulnerability(path) for path in vulnerability_files]
-    cwe_counts, repo_counts = collect_history(vulnerabilities)
+    cwe_counts, repo_counts = collect_history(load_vulnerability(path) for path in vulnerability_files)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    enriched_count = 0
     with output_path.open("w", encoding="utf-8") as handle:
-        for vulnerability in vulnerabilities:
+        for path in vulnerability_files:
+            vulnerability = load_vulnerability(path)
             metric = recidivism_for_vulnerability(vulnerability, cwe_counts, repo_counts)
             dbs = vulnerability.setdefault("database_specific", {})
+            if "recidivism" in dbs:
+                print(f"Overwriting existing recidivism metric for vulnerability {vulnerability.get('id', 'UNKNOWN')}")
             dbs["recidivism"] = metric
 
-            severity = vulnerability.setdefault("severity", [])
+            severity = [
+                item
+                for item in vulnerability.setdefault("severity", [])
+                if item.get("type") not in {"RECIDIVISM", "RECIDIVISM_ADJUSTED"}
+            ]
             severity.append({"type": "RECIDIVISM", "score": f"{metric['score']:.2f}"})
             adjusted = metric["adjusted_severity_score"]
             if adjusted is not None:
                 severity.append({"type": "RECIDIVISM_ADJUSTED", "score": f"{adjusted:.2f}"})
+            vulnerability["severity"] = severity
 
             handle.write(json.dumps(vulnerability, sort_keys=True))
             handle.write("\n")
+            enriched_count += 1
 
-    print(f"Enriched {len(vulnerabilities)} vulnerabilities -> {output_path}")
+    print(f"Enriched {enriched_count} vulnerabilities -> {output_path}")
 
 
 if __name__ == "__main__":
