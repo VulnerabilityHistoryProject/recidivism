@@ -25,6 +25,9 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
     repo_name = parts[-1][:-4] if parts[-1].endswith(".git") else parts[-1]
     destination = target_dir / owner / repo_name
     destination.parent.mkdir(parents=True, exist_ok=True)
+    # non interactive param
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
     if destination.exists():
         if update_existing:
             result = subprocess.run(
@@ -32,10 +35,18 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
                 check=False,
                 capture_output=True,
                 text=True,
+                env=env,
             )
+            #if result.returncode != 0:
+            #    stderr = result.stderr.strip() if result.stderr else f"git pull exited with code {result.returncode}"
+            #    print(f"Warning: failed to update {destination} ({repo_url}): {stderr}")
             if result.returncode != 0:
-                stderr = result.stderr.strip() if result.stderr else f"git pull exited with code {result.returncode}"
-                print(f"Warning: failed to update {destination} ({repo_url}): {stderr}")
+                stderr = result.stderr.lower()
+                if "terminal prompts disabled" in stderr or "authentication failed" in stderr:
+                    print(f"Skipping (Auth Required): {repo_url}")
+                    log_skipped(repo_url, "Auth required during update")
+                else:
+                    print(f"Warning: failed to update {destination}: {result.stderr.strip()}")
         return
 
     result = subprocess.run(
@@ -43,10 +54,18 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
         check=False,
         capture_output=True,
         text=True,
+        env=env,
     )
+    #if result.returncode != 0:
+    #    stderr = result.stderr.strip() if result.stderr else f"git clone exited with code {result.returncode}"
+    #    print(f"Warning: failed to clone {repo_url}: {stderr}")
     if result.returncode != 0:
-        stderr = result.stderr.strip() if result.stderr else f"git clone exited with code {result.returncode}"
-        print(f"Warning: failed to clone {repo_url}: {stderr}")
+        stderr = result.stderr.lower()
+        if "terminal prompts disabled" in stderr or "authentication failed" in stderr:
+            print(f"Skipping (Auth Required): {repo_url}")
+            log_skipped(repo_url, "Auth required during clone")
+        else:
+            print(f"Warning: failed to clone {repo_url}: {result.stderr.strip()}")
 
 
 def main() -> None:
