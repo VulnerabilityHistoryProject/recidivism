@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 import argparse
 import subprocess
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
 from osv_common import extract_repo_urls, iter_vulnerability_files, load_vulnerability
 from recidivism_config import get_required_value, load_config_with_source, resolve_config_path
 
+SKIP_LOG = Path("skipped_repos.txt")
+
+#Logs a skipped repository URL to a text file.
+def log_skipped(repo_url: str, reason: str) -> None:
+    with open(SKIP_LOG, "a") as f:
+        f.write(f"{datetime.now()}::: {repo_url} (Reason: {reason})\n")
 
 def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> None:
     parsed = urlparse(repo_url)
