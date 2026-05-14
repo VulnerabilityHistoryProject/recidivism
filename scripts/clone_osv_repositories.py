@@ -65,7 +65,7 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
     #    print(f"Warning: failed to clone {repo_url}: {stderr}")
     #if result.returncode != 0:
     if result.returncode == 0:
-        print(f"[✓] Successfully updated: {owner}/{repo_name}")
+        print(f"[✓] Successfully cloned: {owner}/{repo_name}")
     else:
         stderr = result.stderr.lower()
         if "terminal prompts disabled" in stderr or "authentication failed" in stderr:
