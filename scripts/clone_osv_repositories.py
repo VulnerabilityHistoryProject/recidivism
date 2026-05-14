@@ -15,9 +15,24 @@ SKIP_LOG = Path("skipped_repos.txt")
 def log_skipped(repo_url: str, reason: str) -> None:
     with open(SKIP_LOG, "a") as f:
         f.write(f"{datetime.now()}::: {repo_url} (Reason: {reason})\n")
+        
+def make_url_public(raw_url: str) -> str:
+    # Convert SSH strings (git@github.com:owner/repo.git) to HTTPS format
+    if raw_url.startswith("git@") or "://" not in raw_url:
+        cleaned = re.sub(r"^git@([^:]+):", r"https://\1/", raw_url)
+        return cleaned
+    # Strip personal tokens, usernames, and passwords out of HTTPS URLs
+    parsed = urlparse(raw_url)
+    if parsed.username or parsed.password:
+        clean_netloc = parsed.hostname
+        if parsed.port:
+            clean_netloc = f"{clean_netloc}:{parsed.port}"
+        parsed = parsed._replace(netloc=clean_netloc)
+    return parsed.geturl()
 
 def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> None:
-    parsed = urlparse(repo_url)
+    public_url = make_url_public(repo_url)
+    parsed = urlparse(public_url)
     parts = [part for part in parsed.path.split("/") if part]
     if len(parts) < 2:
         print(f"Warning: skipping malformed repository URL: {repo_url}")
@@ -38,10 +53,6 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
                 text=True,
                 env=env,
             )
-            #if result.returncode != 0:
-            #    stderr = result.stderr.strip() if result.stderr else f"git pull exited with code {result.returncode}"
-            #    print(f"Warning: failed to update {destination} ({repo_url}): {stderr}")
-            #if result.returncode != 0:
             if result.returncode == 0:
                 print(f"[✓] Successfully updated: {owner}/{repo_name}")
             else:
@@ -52,7 +63,7 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
                 else:
                     print(f"Warning: failed to update {destination}: {result.stderr.strip()}")
         return
-
+        
     result = subprocess.run(
         ["git", "clone", repo_url, str(destination)],
         check=False,
@@ -60,10 +71,6 @@ def clone_or_update(repo_url: str, target_dir: Path, update_existing: bool) -> N
         text=True,
         env=env,
     )
-    #if result.returncode != 0:
-    #    stderr = result.stderr.strip() if result.stderr else f"git clone exited with code {result.returncode}"
-    #    print(f"Warning: failed to clone {repo_url}: {stderr}")
-    #if result.returncode != 0:
     if result.returncode == 0:
         print(f"[✓] Successfully cloned: {owner}/{repo_name}")
     else:
