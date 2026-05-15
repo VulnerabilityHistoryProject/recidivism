@@ -41,3 +41,20 @@ python scripts/clone_osv_repositories.py \
 This script scans OSV vulnerabilities for GitHub source references and
 clones/updates local copies for research workflows (organized as
 `<target-dir>/<owner>/<repo>`).
+
+### 3) Delete skipped/empty repositories
+
+```bash
+python scripts/cleanup_empty_repos.py --path data/repos --dry-run
+```
+
+The script cleanup_empty_repos.py deletes empty repositories that were 
+created in the cloning process. These repos either no longer exist or were 
+privated. This command runs a dry-run without permanent changes. 
+
+```bash
+python scripts/cleanup_empty_repos.py --path data/repos --yes
+```
+
+This command runs the script and removes empty directories without user 
+prompts.
