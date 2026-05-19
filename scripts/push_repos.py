@@ -30,10 +30,12 @@ def stage_and_commit_repository(repo_root: Path) -> bool:
         print()
         return False
 
+    print(f"[✓] Added changes in {repo_root}")
     commit_message = f"push {repo_root.name}"
+    print(f"Committing {repo_root} with message: '{commit_message}'")
     commit_result = run_git_command(repo_root, ["commit", "-m", commit_message])
     if commit_result.returncode == 0:
-        print(f"[✓] Committed: {repo_root}")
+        print(f"[✓] Committed {repo_root} with message: '{commit_message}'")
         return True
 
     stdout = commit_result.stdout.strip()
@@ -50,7 +52,9 @@ def stage_and_commit_repository(repo_root: Path) -> bool:
 
 
 def push_repository(repo_root: Path, remote: str, refspec: str, no_verify: bool) -> bool:
-    print(f"Pushing repository: {repo_root}")
+    refspec_label = f" {refspec}" if refspec else ""
+    no_verify_label = " --no-verify" if no_verify else ""
+    print(f"Pushing repository: {repo_root} to remote '{remote}'{refspec_label}{no_verify_label}")
     command = ["git", "-C", str(repo_root), "push", remote]
     if refspec:
         command.append(refspec)
@@ -59,7 +63,7 @@ def push_repository(repo_root: Path, remote: str, refspec: str, no_verify: bool)
 
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"[✓] Pushed: {repo_root}\n")
+        print(f"[✓] Pushed {repo_root} to {remote}{refspec_label}\n")
         return True
 
     print(f"[✗] Failed to push: {repo_root}")
