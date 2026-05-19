@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Push every Git repository under data/repos/ one at a time."""
+"""Stage, commit, and push every Git repository under data/repos/ one at a time."""
 
 import argparse
 import subprocess
@@ -16,14 +16,47 @@ def find_git_repositories(root: Path):
     return sorted(repo_roots)
 
 
+def run_git_command(repo_root: Path, args) -> subprocess.CompletedProcess:
+    command = ["git", "-C", str(repo_root)] + args
+    return subprocess.run(command, capture_output=True, text=True)
+
+
+def stage_and_commit_repository(repo_root: Path) -> bool:
+    print(f"Staging changes in repository: {repo_root}")
+    add_result = run_git_command(repo_root, ["add", "."])
+    if add_result.returncode != 0:
+        print(f"[✗] git add failed for {repo_root}")
+        print(add_result.stderr.strip())
+        print()
+        return False
+
+    commit_message = f"push {repo_root.name}"
+    commit_result = run_git_command(repo_root, ["commit", "-m", commit_message])
+    if commit_result.returncode == 0:
+        print(f"[✓] Committed: {repo_root}")
+        return True
+
+    stdout = commit_result.stdout.strip()
+    stderr = commit_result.stderr.strip()
+    if "nothing to commit" in stdout.lower() or "nothing to commit" in stderr.lower():
+        print(f"[i] No changes to commit in {repo_root}")
+        return True
+
+    print(f"[✗] git commit failed for {repo_root}")
+    print(stdout)
+    print(stderr)
+    print()
+    return False
+
+
 def push_repository(repo_root: Path, remote: str, refspec: str, no_verify: bool) -> bool:
+    print(f"Pushing repository: {repo_root}")
     command = ["git", "-C", str(repo_root), "push", remote]
     if refspec:
         command.append(refspec)
     if no_verify:
         command.append("--no-verify")
 
-    print(f"Pushing repository: {repo_root}")
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode == 0:
         print(f"[✓] Pushed: {repo_root}\n")
@@ -38,7 +71,8 @@ def push_repository(repo_root: Path, remote: str, refspec: str, no_verify: bool)
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Push every Git repository found under data/repos/.")
+        description="Stage, commit, and push every Git repository found under data/repos/."
+    )
     parser.add_argument(
         "--path",
         default=Path("data") / "repos",
@@ -84,13 +118,17 @@ def main():
 
     failures = []
     for repo in repositories:
+        if not stage_and_commit_repository(repo):
+            failures.append(repo)
+            continue
+
         success = push_repository(repo, args.remote, args.refspec, args.no_verify)
         if not success:
             failures.append(repo)
 
     print(f"\nProcessed {len(repositories)} repositories.")
     if failures:
-        print(f"{len(failures)} repositories failed to push.")
+        print(f"{len(failures)} repositories failed during add/commit/push.")
         for failed_repo in failures:
             print(f" - {failed_repo}")
         raise SystemExit(1)
