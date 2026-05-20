@@ -4,6 +4,7 @@
 import argparse
 import os
 import subprocess
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -177,6 +178,12 @@ def parse_args():
         default=None,
         help="Path to SSH private key for authentication (instead of token-based auth).",
     )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=1.0,
+        help="Seconds to wait after each directory push before processing the next one.",
+    )
     return parser.parse_args()
 
 
@@ -191,23 +198,30 @@ def main():
             print(directory)
         return
 
+    ensure_ssh_remote(repo_root, args.remote)
     failures = []
+    successful = 0
+
     for directory in directories:
         if not stage_and_commit_directory(repo_root, directory, args.ssh_key):
             failures.append(directory)
+            continue
+
+        if not push_repository(repo_root, args.remote, args.refspec, args.no_verify, args.ssh_key):
+            failures.append(directory)
+            continue
+
+        successful += 1
+        if args.delay > 0:
+            time.sleep(args.delay)
 
     if failures:
-        print(f"{len(failures)} directories failed during add/commit.")
+        print(f"{len(failures)} directories failed during add/commit/push.")
         for failed_dir in failures:
             print(f" - {failed_dir}")
         raise SystemExit(1)
 
-    ensure_ssh_remote(repo_root, args.remote)
-    success = push_repository(repo_root, args.remote, args.refspec, args.no_verify, args.ssh_key)
-    if not success:
-        raise SystemExit(1)
-
-    print(f"\nProcessed {len(directories)} directories and pushed repository {repo_root}.")
+    print(f"\nProcessed {successful} directories and pushed repository {repo_root} after each commit.")
 
 
 if __name__ == "__main__":
