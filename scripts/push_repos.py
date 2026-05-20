@@ -2,6 +2,7 @@
 """Stage, commit, and push every Git repository under data/repos/ one at a time."""
 
 import argparse
+import os
 import subprocess
 from pathlib import Path
 
@@ -16,14 +17,18 @@ def find_git_repositories(root: Path):
     return sorted(repo_roots)
 
 
-def run_git_command(repo_root: Path, args) -> subprocess.CompletedProcess:
+def run_git_command(repo_root: Path, args, ssh_key: str = None) -> subprocess.CompletedProcess:
     command = ["git", "-C", str(repo_root)] + args
-    return subprocess.run(command, capture_output=True, text=True)
+    env = None
+    if ssh_key:
+        env = os.environ.copy()
+        env["GIT_SSH_COMMAND"] = f"ssh -i {ssh_key} -o StrictHostKeyChecking=no"
+    return subprocess.run(command, capture_output=True, text=True, env=env)
 
 
-def stage_and_commit_repository(repo_root: Path) -> bool:
+def stage_and_commit_repository(repo_root: Path, ssh_key: str = None) -> bool:
     print(f"Staging changes in repository: {repo_root}")
-    add_result = run_git_command(repo_root, ["add", "."])
+    add_result = run_git_command(repo_root, ["add", "."], ssh_key)
     if add_result.returncode != 0:
         print(f"[✗] git add failed for {repo_root}")
         print(add_result.stderr.strip())
@@ -33,7 +38,7 @@ def stage_and_commit_repository(repo_root: Path) -> bool:
     print(f"[✓] Added changes in {repo_root}")
     commit_message = f"push {repo_root.name}"
     print(f"Committing {repo_root} with message: '{commit_message}'")
-    commit_result = run_git_command(repo_root, ["commit", "-m", commit_message])
+    commit_result = run_git_command(repo_root, ["commit", "-m", commit_message], ssh_key)
     if commit_result.returncode == 0:
         print(f"[✓] Committed {repo_root} with message: '{commit_message}'")
         return True
@@ -51,7 +56,7 @@ def stage_and_commit_repository(repo_root: Path) -> bool:
     return False
 
 
-def push_repository(repo_root: Path, remote: str, refspec: str, no_verify: bool) -> bool:
+def push_repository(repo_root: Path, remote: str, refspec: str, no_verify: bool, ssh_key: str = None) -> bool:
     refspec_label = f" {refspec}" if refspec else ""
     no_verify_label = " --no-verify" if no_verify else ""
     print(f"Pushing repository: {repo_root} to remote '{remote}'{refspec_label}{no_verify_label}")
@@ -61,7 +66,12 @@ def push_repository(repo_root: Path, remote: str, refspec: str, no_verify: bool)
     if no_verify:
         command.append("--no-verify")
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    env = None
+    if ssh_key:
+        env = os.environ.copy()
+        env["GIT_SSH_COMMAND"] = f"ssh -i {ssh_key} -o StrictHostKeyChecking=no"
+    
+    result = subprocess.run(command, capture_output=True, text=True, env=env)
     if result.returncode == 0:
         print(f"[✓] Pushed {repo_root} to {remote}{refspec_label}\n")
         return True
@@ -102,6 +112,11 @@ def parse_args():
         action="store_true",
         help="Show the repositories that would be pushed without running git push.",
     )
+    parser.add_argument(
+        "--ssh-key",
+        default=None,
+        help="Path to SSH private key for authentication (instead of token-based auth).",
+    )
     return parser.parse_args()
 
 
@@ -122,11 +137,11 @@ def main():
 
     failures = []
     for repo in repositories:
-        if not stage_and_commit_repository(repo):
+        if not stage_and_commit_repository(repo, args.ssh_key):
             failures.append(repo)
             continue
 
-        success = push_repository(repo, args.remote, args.refspec, args.no_verify)
+        success = push_repository(repo, args.remote, args.refspec, args.no_verify, args.ssh_key)
         if not success:
             failures.append(repo)
 
