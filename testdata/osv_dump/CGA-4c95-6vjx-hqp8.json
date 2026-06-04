@@ -1,0 +1,90 @@
+{
+  "modified": "2026-05-21T15:51:18Z",
+  "id": "CGA-4c95-6vjx-hqp8",
+  "related": [
+    "CVE-2026-27446",
+    "GHSA-fw88-pf9m-p947"
+  ],
+  "affected": [
+    {
+      "package": {
+        "ecosystem": "Chainguard",
+        "name": "wildfly-openjdk-17",
+        "purl": "pkg:apk/chainguard/wildfly-openjdk-17"
+      },
+      "ranges": [
+        {
+          "type": "ECOSYSTEM",
+          "events": [
+            {
+              "introduced": "0"
+            },
+            {
+              "fixed": "40.0.0-r0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "package": {
+        "ecosystem": "Chainguard",
+        "name": "wildfly-openjdk-21",
+        "purl": "pkg:apk/chainguard/wildfly-openjdk-21"
+      },
+      "ranges": [
+        {
+          "type": "ECOSYSTEM",
+          "events": [
+            {
+              "introduced": "0"
+            },
+            {
+              "fixed": "40.0.0-r0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "package": {
+        "ecosystem": "Wolfi",
+        "name": "wildfly-openjdk-17",
+        "purl": "pkg:apk/wolfi/wildfly-openjdk-17"
+      },
+      "ranges": [
+        {
+          "type": "ECOSYSTEM",
+          "events": [
+            {
+              "introduced": "0"
+            },
+            {
+              "fixed": "40.0.0-r0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "package": {
+        "ecosystem": "Wolfi",
+        "name": "wildfly-openjdk-21",
+        "purl": "pkg:apk/wolfi/wildfly-openjdk-21"
+      },
+      "ranges": [
+        {
+          "type": "ECOSYSTEM",
+          "events": [
+            {
+              "introduced": "0"
+            },
+            {
+              "fixed": "40.0.0-r0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
