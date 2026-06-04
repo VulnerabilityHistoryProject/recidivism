@@ -1,18 +1,22 @@
 {
-  "name": "@recidivism/npm-package-template",
+  "name": "vulnerability-recidivism",
   "version": "0.1.0",
-  "description": "Basic Node.js package template",
+  "description": "Parses Recidivism severity strings ",
   "main": "src/index.js",
-  "type": "commonjs",
+    "repository": {
+    "type": "git",
+    "url": "https://github.com/VulnerabilityHistoryProject/recidivism.git"
+  },
+  "type": "module",
   "scripts": {
     "start": "node src/index.js",
     "test": "node --test"
   },
   "keywords": [
-    "template",
-    "node",
-    "package"
+    "vulnerability",
+	"recidivism",
+	"severity"
   ],
-  "author": "",
+  "author": "@andymeneely",
   "license": "MIT"
 }
