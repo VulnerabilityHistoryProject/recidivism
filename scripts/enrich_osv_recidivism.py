@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 from urllib.request import urlretrieve
 
-from osv_common import collect_history, iter_vulnerability_files, load_vulnerability, recidivism_for_vulnerability
+from osv_common import iter_vulnerability_files, load_vulnerability
 from recidivism_config import get_required_value, load_config_with_source, resolve_config_path
 
 
@@ -36,7 +36,7 @@ def extract_dump(archive: Path, extract_dir: Path, force: bool) -> None:
 def main() -> None:
     config, config_source = load_config_with_source("enrich")
 
-    parser = argparse.ArgumentParser(description="Download OSV dump and enrich with recidivism metrics.")
+    parser = argparse.ArgumentParser(description="Download OSV dump and copy extracted JSON content into a JSONL file.")
     parser.add_argument("--dump-url", help="Override enrich.dump_url from recidivism.ini")
     parser.add_argument("--archive-path", help="Override enrich.archive_path from recidivism.ini")
     parser.add_argument("--extract-dir", help="Override enrich.extract_dir from recidivism.ini")
@@ -65,35 +65,17 @@ def main() -> None:
     extract_dump(archive_path, extract_dir, args.force_extract)
 
     vulnerability_files = list(iter_vulnerability_files(extract_dir))
-    cwe_counts, repo_counts = collect_history(load_vulnerability(path) for path in vulnerability_files)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    enriched_count = 0
+    copied_count = 0
     with output_path.open("w", encoding="utf-8") as handle:
         for path in vulnerability_files:
             vulnerability = load_vulnerability(path)
-            metric = recidivism_for_vulnerability(vulnerability, cwe_counts, repo_counts)
-            dbs = vulnerability.setdefault("database_specific", {})
-            if "recidivism" in dbs:
-                print(f"Overwriting existing recidivism metric for vulnerability {vulnerability.get('id', 'UNKNOWN')}")
-            dbs["recidivism"] = metric
-
-            severity = [
-                item
-                for item in vulnerability.setdefault("severity", [])
-                if item.get("type") not in {"RECIDIVISM", "RECIDIVISM_ADJUSTED"}
-            ]
-            severity.append({"type": "RECIDIVISM", "score": f"{metric['score']:.2f}"})
-            adjusted = metric["adjusted_severity_score"]
-            if adjusted is not None:
-                severity.append({"type": "RECIDIVISM_ADJUSTED", "score": f"{adjusted:.2f}"})
-            vulnerability["severity"] = severity
-
             handle.write(json.dumps(vulnerability, sort_keys=True))
             handle.write("\n")
-            enriched_count += 1
+            copied_count += 1
 
-    print(f"Enriched {enriched_count} vulnerabilities -> {output_path}")
+    print(f"Copied {copied_count} vulnerabilities -> {output_path}")
 
 
 if __name__ == "__main__":
