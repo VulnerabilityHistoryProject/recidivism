@@ -58,3 +58,20 @@ python scripts/cleanup_empty_repos.py --path data/repos --yes
 
 This command runs the script and removes empty directories without user 
 prompts.
+
+### 4) Generate individual recidivism score files
+
+```bash
+python scripts/generate_recidivism_scores.py \
+  --input data/osv_recidivism.jsonl \
+  --output-dir data/scores
+```
+
+This script:
+- scans `osv_recidivism.jsonl` for all vulnerabilities,
+- calculates a recidivism score for each vulnerability based on CWE/repository recurrence,
+- generates individual JSON files in `data/scores/<vulnerability_id>.json` containing:
+  - list of CWEs and repositories referenced in the vulnerability
+  - CWE and repository repeat counts
+  - raw recidivism score
+  - base and adjusted severity scores

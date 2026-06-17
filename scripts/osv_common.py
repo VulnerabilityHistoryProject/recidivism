@@ -90,6 +90,22 @@ def extract_fix_commits(vulnerability: Dict) -> Set[str]:
     return commits
 
 
+def extract_affected_ecosystems(vulnerability: Dict) -> Set[str]:
+    ecosystems: Set[str] = set()
+    for affected in vulnerability.get("affected", []):
+        package = affected.get("package", {})
+        ecosystem = package.get("ecosystem")
+        if isinstance(ecosystem, str) and ecosystem:
+            ecosystems.add(ecosystem)
+    return ecosystems
+
+
+def extract_cwe_ecosystem_pairs(vulnerability: Dict) -> Set[Tuple[str, str]]:
+    cwes = extract_cwes(vulnerability)
+    ecosystems = extract_affected_ecosystems(vulnerability)
+    return {(cwe, ecosystem) for cwe in cwes for ecosystem in ecosystems}
+
+
 def parse_base_severity(vulnerability: Dict) -> Optional[float]:
     for severity in vulnerability.get("severity", []):
         if severity.get("type") in {"RECIDIVISM", "RECIDIVISM_ADJUSTED"}:
@@ -105,32 +121,37 @@ def parse_base_severity(vulnerability: Dict) -> Optional[float]:
 
 def collect_history(
     vulnerabilities: Iterable[Dict],
-) -> Tuple[Dict[str, int], Dict[str, int]]:
-    cwe_counts: Dict[str, int] = {}
+) -> Tuple[Dict[Tuple[str, str], int], Dict[str, int]]:
+    cwe_ecosystem_counts: Dict[Tuple[str, str], int] = {}
     repo_counts: Dict[str, int] = {}
 
     for vulnerability in vulnerabilities:
-        for cwe in extract_cwes(vulnerability):
-            cwe_counts[cwe] = cwe_counts.get(cwe, 0) + 1
+        for pair in extract_cwe_ecosystem_pairs(vulnerability):
+            cwe_ecosystem_counts[pair] = cwe_ecosystem_counts.get(pair, 0) + 1
         for repo in extract_repo_urls(vulnerability):
             repo_counts[repo] = repo_counts.get(repo, 0) + 1
 
-    return cwe_counts, repo_counts
+    return cwe_ecosystem_counts, repo_counts
 
 
 def recidivism_for_vulnerability(
     vulnerability: Dict,
-    cwe_counts: Dict[str, int],
+    cwe_counts: Dict[Tuple[str, str], int],
     repo_counts: Dict[str, int],
 ) -> Dict[str, object]:
     cwes = extract_cwes(vulnerability)
+    ecosystems = extract_affected_ecosystems(vulnerability)
     repos = extract_repo_urls(vulnerability)
     fix_commits = extract_fix_commits(vulnerability)
 
-    cwe_repeat_count = sum(max(cwe_counts.get(cwe, 0) - 1, 0) for cwe in cwes)
+    cwe_repeat_count = sum(
+        max(cwe_counts.get((cwe, ecosystem), 0) - 1, 0)
+        for cwe in cwes
+        for ecosystem in ecosystems
+    )
     repo_repeat_count = sum(max(repo_counts.get(repo, 0) - 1, 0) for repo in repos)
 
-    recidivism_score = float(cwe_repeat_count + repo_repeat_count)
+    recidivism_score = float(cwe_repeat_count)
     base_score = parse_base_severity(vulnerability)
     adjusted_score = (
         max(0.0, min(MAX_SEVERITY_SCORE, base_score + recidivism_score))
@@ -140,6 +161,7 @@ def recidivism_for_vulnerability(
 
     return {
         "cwes": sorted(cwes),
+        "affected_ecosystems": sorted(ecosystems),
         "repositories": sorted(repos),
         "fix_commits": sorted(fix_commits),
         "cwe_repeat_count": cwe_repeat_count,
