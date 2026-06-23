@@ -30,7 +30,7 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        dump_url = args.dump_url or get_required_value(config, "dump", "osv_dump_url")
+        dump_url = args.osv_dump_url or get_required_value(config, "dump", "osv_dump_url")
         archive_path = resolve_config_path(args.archive_path or get_required_value(config, "dump", "archive_path"))
     except ValueError as error:
         parser.error(f"{error} (config: {config_source})")
