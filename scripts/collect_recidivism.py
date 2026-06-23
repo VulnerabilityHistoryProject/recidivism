@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generate individual recidivism score JSON files for each vulnerability.
+"""Generate recidivism scores for each vulnerability, as available.
 
-This script scans osv_recidivism.jsonl, calculates a recidivism score for each
-vulnerability using CWE + ecosystem recurrence, and writes the result to
-`data/scores/<vulnerability_id>.json`.
+Calculates a recidivism score for each vulnerability using
+CWE + ecosystem + package recurrence,
+then writes results to data/osv_recidivism.jsonl
 """
 
 import argparse
@@ -14,7 +14,6 @@ from typing import Dict, Iterable
 
 from osv_common import collect_history, recidivism_for_vulnerability
 from recidivism_config import get_required_value, load_config_with_source, resolve_config_path
-
 
 def load_vulnerabilities_from_jsonl(jsonl_path: Path) -> Iterable[Dict]:
     """Load vulnerabilities from a JSONL file."""
@@ -34,35 +33,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate individual recidivism score JSON files for each vulnerability."
     )
-    parser.add_argument(
-        "--input",
-        help="Override scores.input from recidivism.ini (path to osv_recidivism.jsonl)",
-    )
-    parser.add_argument(
-        "--output-dir",
-        help="Override scores.output_dir from recidivism.ini (destination directory for score files)",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=config.getint("batch_size", fallback=1000),
-        help="Number of vulnerabilities to process before reporting progress",
-    )
+    parser.add_argument("--archive-path", help="Override dump.archive_path from recidivism.ini")
+    parser.add_argument("--jsonl-output", help="Override scores.jsonl_output from recidivism.ini")
+
     args = parser.parse_args()
 
     try:
-        input_path = resolve_config_path(
-            args.input or get_required_value(config, "scores", "input")
+        archive_path = resolve_config_path(
+            args.archive_path or get_required_value(config, "dump", "archive_path")
         )
-        output_dir = resolve_config_path(
-            args.output_dir or get_required_value(config, "scores", "output_dir")
+        output_path = resolve_config_path(
+            args.jsonl_output or get_required_value(config, "scores", "jsonl_output")
         )
     except ValueError as error:
         parser.error(f"{error} (config: {config_source})")
 
     # Load all vulnerabilities first
-    print(f"Loading vulnerabilities from {input_path}...")
-    vulnerabilities = list(load_vulnerabilities_from_jsonl(input_path))
+    print(f"Loading vulnerabilities from {archive_path}...")
+
+
+    # vulnerabilities = list(load_vulnerabilities_from_jsonl())
+    vulnerabilities = [] # FIXME - need to update this with our new inputs - the zip file instead
     print(f"Loaded {len(vulnerabilities)} vulnerabilities")
 
     # Collect CWE/ecosystem and repository history
@@ -72,11 +63,12 @@ def main() -> None:
         f"Found {len(cwe_counts)} unique CWE+ecosystem pairs and {len(repo_counts)} unique repositories"
     )
 
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # FIXME - Remove and just do jsonl output
+    # # Create output directory
+    # output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate score files
-    print(f"Generating score files in {output_dir}...")
+    # # Generate score files
+    # print(f"Generating score files in {output_dir}...")
     processed_count = 0
     skipped_count = 0
     error_count = 0
@@ -112,7 +104,7 @@ def main() -> None:
             error_count += 1
 
     print(f"\nCompleted!")
-    print(f"  Generated: {processed_count} recidivistic score files")
+    print(f"  Generated: {processed_count} recidivistic scores")
     print(f"  Skipped: {skipped_count} non-recidivistic or invalid vulnerabilities")
     print(f"  Errors: {error_count}")
 

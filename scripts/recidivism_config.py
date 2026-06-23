@@ -1,7 +1,6 @@
 import configparser
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LOCAL_CONFIG_FILE = REPO_ROOT / "recidivism.ini"
 DEFAULT_CONFIG_FILE = REPO_ROOT / "recidivism.default.ini"
