@@ -100,10 +100,26 @@ def extract_affected_ecosystems(vulnerability: Dict) -> Set[str]:
     return ecosystems
 
 
-def extract_cwe_ecosystem_pairs(vulnerability: Dict) -> Set[Tuple[str, str]]:
+def extract_affected_package_pairs(vulnerability: Dict) -> Set[Tuple[str, str]]:
+    packages: Set[Tuple[str, str]] = set()
+    for affected in vulnerability.get("affected", []):
+        package = affected.get("package", {})
+        ecosystem = package.get("ecosystem")
+        name = package.get("name")
+        if (
+            isinstance(ecosystem, str)
+            and ecosystem
+            and isinstance(name, str)
+            and name
+        ):
+            packages.add((ecosystem, name))
+    return packages
+
+
+def extract_cwe_package_pairs(vulnerability: Dict) -> Set[Tuple[str, str, str]]:
     cwes = extract_cwes(vulnerability)
-    ecosystems = extract_affected_ecosystems(vulnerability)
-    return {(cwe, ecosystem) for cwe in cwes for ecosystem in ecosystems}
+    package_pairs = extract_affected_package_pairs(vulnerability)
+    return {(cwe, ecosystem, name) for cwe in cwes for ecosystem, name in package_pairs}
 
 
 def parse_base_severity(vulnerability: Dict) -> Optional[float]:
@@ -121,33 +137,34 @@ def parse_base_severity(vulnerability: Dict) -> Optional[float]:
 
 def collect_history(
     vulnerabilities: Iterable[Dict],
-) -> Tuple[Dict[Tuple[str, str], int], Dict[str, int]]:
-    cwe_ecosystem_counts: Dict[Tuple[str, str], int] = {}
+) -> Tuple[Dict[Tuple[str, str, str], int], Dict[str, int]]:
+    cwe_package_counts: Dict[Tuple[str, str, str], int] = {}
     repo_counts: Dict[str, int] = {}
 
     for vulnerability in vulnerabilities:
-        for pair in extract_cwe_ecosystem_pairs(vulnerability):
-            cwe_ecosystem_counts[pair] = cwe_ecosystem_counts.get(pair, 0) + 1
+        for pair in extract_cwe_package_pairs(vulnerability):
+            cwe_package_counts[pair] = cwe_package_counts.get(pair, 0) + 1
         for repo in extract_repo_urls(vulnerability):
             repo_counts[repo] = repo_counts.get(repo, 0) + 1
 
-    return cwe_ecosystem_counts, repo_counts
+    return cwe_package_counts, repo_counts
 
 
 def recidivism_for_vulnerability(
     vulnerability: Dict,
-    cwe_counts: Dict[Tuple[str, str], int],
+    cwe_counts: Dict[Tuple[str, str, str], int],
     repo_counts: Dict[str, int],
 ) -> Dict[str, object]:
     cwes = extract_cwes(vulnerability)
     ecosystems = extract_affected_ecosystems(vulnerability)
+    packages = extract_affected_package_pairs(vulnerability)
     repos = extract_repo_urls(vulnerability)
     fix_commits = extract_fix_commits(vulnerability)
 
     cwe_repeat_count = sum(
-        max(cwe_counts.get((cwe, ecosystem), 0) - 1, 0)
+        max(cwe_counts.get((cwe, ecosystem, name), 0) - 1, 0)
         for cwe in cwes
-        for ecosystem in ecosystems
+        for ecosystem, name in packages
     )
     repo_repeat_count = sum(max(repo_counts.get(repo, 0) - 1, 0) for repo in repos)
 
@@ -162,6 +179,7 @@ def recidivism_for_vulnerability(
     return {
         "cwes": sorted(cwes),
         "affected_ecosystems": sorted(ecosystems),
+        "affected_packages": sorted(f"{ecosystem}:{name}" for ecosystem, name in packages),
         "repositories": sorted(repos),
         "fix_commits": sorted(fix_commits),
         "cwe_repeat_count": cwe_repeat_count,

@@ -7,6 +7,7 @@ sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "scripts")))
 from osv_common import (  # noqa: E402
     collect_history,
     extract_affected_ecosystems,
+    extract_affected_package_pairs,
     extract_cwes,
     extract_fix_commits,
     extract_repo_urls,
@@ -32,6 +33,7 @@ class OsvCommonTests(unittest.TestCase):
 
         self.assertEqual(extract_cwes(vulnerability), {"CWE-79", "CWE-89"})
         self.assertEqual(extract_affected_ecosystems(vulnerability), {"pip"})
+        self.assertEqual(extract_affected_package_pairs(vulnerability), {("pip", "example")})
         self.assertEqual(extract_repo_urls(vulnerability), {"https://github.com/example/project.git"})
         self.assertEqual(extract_fix_commits(vulnerability), {"a1b2c3d4", "deadbeef"})
 
@@ -57,6 +59,7 @@ class OsvCommonTests(unittest.TestCase):
         self.assertEqual(metric["repo_repeat_count"], 1)
         self.assertEqual(metric["score"], 1.0)
         self.assertEqual(metric["affected_ecosystems"], ["pip"])
+        self.assertEqual(metric["affected_packages"], ["pip:example"])
         self.assertEqual(metric["adjusted_severity_score"], 8.5)
 
     def test_adjusted_severity_is_lower_bounded(self) -> None:
