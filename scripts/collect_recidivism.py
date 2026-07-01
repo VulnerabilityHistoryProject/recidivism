@@ -17,6 +17,15 @@ from osv_common import collect_history, recidivism_for_vulnerability
 from recidivism_config import get_required_value, load_config_with_source, resolve_config_path
 
 
+def build_output_record(vulnerability: Dict, score_data: Dict) -> Dict:
+    """Build a JSONL record matching the sample recidivism format."""
+    return {
+        "id": vulnerability.get("id"),
+        "severity": [{"type": "recidivism", "score": "recidivistic:true"}],
+        "score": score_data.get("score"),
+    }
+
+
 def load_vulnerabilities_from_zip(zip_path: Path) -> Iterable[Dict]:
     """Load vulnerabilities from a zip file by iterating through JSON files."""
     if not zip_path.exists():
@@ -106,8 +115,9 @@ def main() -> None:
                     skipped_count += 1
                     continue
 
-                # Write to JSONL
-                output_handle.write(json.dumps(score_data, sort_keys=True))
+                # Write to JSONL in the sample recidivism format
+                output_record = build_output_record(vulnerability, score_data)
+                output_handle.write(json.dumps(output_record, sort_keys=True))
                 output_handle.write("\n")
 
                 processed_count += 1
