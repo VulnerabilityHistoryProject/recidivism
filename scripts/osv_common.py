@@ -90,6 +90,22 @@ def extract_fix_commits(vulnerability: Dict) -> Set[str]:
     return commits
 
 
+def _infer_package_from_references(vulnerability: Dict) -> Tuple[Optional[str], Optional[str]]:
+    for ref in vulnerability.get("references", []):
+        url = ref.get("url")
+        if not isinstance(url, str):
+            continue
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            continue
+        if parsed.netloc.lower() != "github.com":
+            continue
+        parts = [part for part in parsed.path.split("/") if part]
+        if len(parts) >= 2:
+            return "pip", parts[0]
+    return None, None
+
+
 def extract_affected_ecosystems(vulnerability: Dict) -> Set[str]:
     ecosystems: Set[str] = set()
     for affected in vulnerability.get("affected", []):
@@ -97,6 +113,10 @@ def extract_affected_ecosystems(vulnerability: Dict) -> Set[str]:
         ecosystem = package.get("ecosystem")
         if isinstance(ecosystem, str) and ecosystem:
             ecosystems.add(ecosystem)
+            continue
+        inferred_ecosystem, _ = _infer_package_from_references(vulnerability)
+        if inferred_ecosystem:
+            ecosystems.add(inferred_ecosystem)
     return ecosystems
 
 
@@ -113,6 +133,11 @@ def extract_affected_package_pairs(vulnerability: Dict) -> Set[Tuple[str, str]]:
             and name
         ):
             packages.add((ecosystem, name))
+            continue
+
+        inferred_ecosystem, inferred_name = _infer_package_from_references(vulnerability)
+        if inferred_ecosystem and inferred_name:
+            packages.add((inferred_ecosystem, inferred_name))
     return packages
 
 
@@ -120,6 +145,95 @@ def extract_cwe_package_pairs(vulnerability: Dict) -> Set[Tuple[str, str, str]]:
     cwes = extract_cwes(vulnerability)
     package_pairs = extract_affected_package_pairs(vulnerability)
     return {(cwe, ecosystem, name) for cwe in cwes for ecosystem, name in package_pairs}
+
+
+def _normalize_version(value: Optional[str]) -> Optional[Tuple[int, ...]]:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if cleaned.startswith(("<", ">", "=", "~", "^")):
+        cleaned = cleaned[1:].strip()
+    if cleaned.startswith("v") and len(cleaned) > 1 and cleaned[1].isdigit():
+        cleaned = cleaned[1:]
+    if cleaned in {"*", "latest"}:
+        return None
+
+    parts = re.split(r"[^0-9]+", cleaned)
+    if not parts or not parts[0]:
+        return None
+
+    numbers = []
+    for part in parts:
+        if part.isdigit():
+            numbers.append(int(part))
+    if not numbers:
+        return None
+
+    while len(numbers) < 3:
+        numbers.append(0)
+    return tuple(numbers[:3])
+
+
+def _compare_versions(left: Optional[str], right: Optional[str]) -> Optional[int]:
+    left_parts = _normalize_version(left)
+    right_parts = _normalize_version(right)
+    if left_parts is None or right_parts is None:
+        return None
+    if left_parts < right_parts:
+        return -1
+    if left_parts > right_parts:
+        return 1
+    return 0
+
+
+def _intervals_overlap(first: Tuple[Optional[str], Optional[str]], second: Tuple[Optional[str], Optional[str]]) -> bool:
+    first_start, first_end = first
+    second_start, second_end = second
+
+    start = first_start
+    if start is None or (second_start is not None and _compare_versions(start, second_start) is not None and _compare_versions(start, second_start) < 0):
+        start = second_start
+
+    end = first_end
+    if end is None or (second_end is not None and _compare_versions(end, second_end) is not None and _compare_versions(end, second_end) > 0):
+        end = second_end
+
+    if start is None or end is None:
+        return True
+
+    return _compare_versions(start, end) is not None and _compare_versions(start, end) < 0
+
+
+def _extract_version_intervals(vulnerability: Dict) -> Dict[Tuple[str, str], List[Tuple[Optional[str], Optional[str]]]]:
+    intervals_by_package: Dict[Tuple[str, str], List[Tuple[Optional[str], Optional[str]]]] = {}
+    for affected in vulnerability.get("affected", []):
+        package = affected.get("package", {})
+        ecosystem = package.get("ecosystem")
+        name = package.get("name")
+        if not isinstance(ecosystem, str) or not ecosystem or not isinstance(name, str) or not name:
+            continue
+
+        key = (ecosystem, name)
+        intervals = []
+        for range_entry in affected.get("ranges", []):
+            current_start: Optional[str] = None
+            for event in range_entry.get("events", []):
+                if isinstance(event, dict) and "introduced" in event:
+                    introduced = event.get("introduced")
+                    if isinstance(introduced, str):
+                        current_start = introduced
+                if isinstance(event, dict) and "fixed" in event:
+                    fixed = event.get("fixed")
+                    if isinstance(fixed, str):
+                        intervals.append((current_start, fixed))
+                        current_start = None
+            if current_start is not None:
+                intervals.append((current_start, None))
+        if intervals:
+            intervals_by_package[key] = intervals
+    return intervals_by_package
 
 
 def parse_base_severity(vulnerability: Dict) -> Optional[float]:
@@ -150,10 +264,40 @@ def collect_history(
     return cwe_package_counts, repo_counts
 
 
+def _detect_version_based_recidivism(vulnerability: Dict, vulnerabilities: Iterable[Dict]) -> Dict[str, bool]:
+    intervals_by_package = _extract_version_intervals(vulnerability)
+    if not intervals_by_package:
+        return {"fix_fix": False, "origin_fix": False}
+
+    fix_fix = False
+    origin_fix = False
+    other_vulnerabilities = list(vulnerabilities)
+
+    for other in other_vulnerabilities:
+        if other.get("id") == vulnerability.get("id"):
+            continue
+
+        other_intervals = _extract_version_intervals(other)
+        for package_key, intervals in intervals_by_package.items():
+            other_package_intervals = other_intervals.get(package_key, [])
+            if not other_package_intervals:
+                continue
+
+            for current_interval in intervals:
+                for other_interval in other_package_intervals:
+                    if _intervals_overlap(current_interval, other_interval):
+                        fix_fix = True
+                    if not fix_fix and _compare_versions(current_interval[0], other_interval[1]) is not None and _compare_versions(current_interval[0], other_interval[1]) >= 0:
+                        origin_fix = True
+
+    return {"fix_fix": fix_fix, "origin_fix": origin_fix}
+
+
 def recidivism_for_vulnerability(
     vulnerability: Dict,
     cwe_counts: Dict[Tuple[str, str, str], int],
     repo_counts: Dict[str, int],
+    all_vulnerabilities: Optional[Iterable[Dict]] = None,
 ) -> Dict[str, object]:
     cwes = extract_cwes(vulnerability)
     ecosystems = extract_affected_ecosystems(vulnerability)
@@ -169,6 +313,7 @@ def recidivism_for_vulnerability(
     repo_repeat_count = sum(max(repo_counts.get(repo, 0) - 1, 0) for repo in repos)
 
     recidivism_score = float(cwe_repeat_count)
+    version_recidivism = _detect_version_based_recidivism(vulnerability, all_vulnerabilities or [])
     base_score = parse_base_severity(vulnerability)
     adjusted_score = (
         max(0.0, min(MAX_SEVERITY_SCORE, base_score + recidivism_score))
@@ -187,4 +332,6 @@ def recidivism_for_vulnerability(
         "score": recidivism_score,
         "base_severity_score": base_score,
         "adjusted_severity_score": adjusted_score,
+        "fix_fix_recidivism": version_recidivism["fix_fix"],
+        "origin_fix_recidivism": version_recidivism["origin_fix"],
     }

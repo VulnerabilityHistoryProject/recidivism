@@ -1,2 +1,2 @@
 { "id": "GHSA-4j5m-wc25-pvh7", "severity": [ { "type": "recidivism", "score": "recidivistic:false" } ] }
-{ "id": "DEBIAN-CVE-2026-43502", "severity": [ { "type": "recidivism", "score": "recidivistic:" } ] }
+{ "id": "DEBIAN-CVE-2026-43502", "severity": [ { "type": "recidivism", "score": "recidivistic:true" } ] }

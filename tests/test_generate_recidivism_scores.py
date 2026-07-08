@@ -64,7 +64,7 @@ class GenerateRecidivismScoresTests(unittest.TestCase):
 
             files = sorted([p.name for p in output_dir.iterdir() if p.is_file()])
 
-        self.assertEqual(files, ["R1.json", "R2.json"])
+            self.assertEqual(files, ["R1.json", "R2.json"])
 
-        output_data = json.loads((output_dir / "R1.json").read_text(encoding="utf-8"))
-        self.assertGreater(output_data["score"], 0.0)
+            output_data = json.loads((output_dir / "R1.json").read_text(encoding="utf-8"))
+            self.assertGreater(output_data["score"], 0.0)

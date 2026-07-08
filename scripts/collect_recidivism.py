@@ -23,6 +23,9 @@ def build_output_record(vulnerability: Dict, score_data: Dict) -> Dict:
         "id": vulnerability.get("id"),
         "severity": [{"type": "recidivism", "score": "recidivistic:true"}],
         "score": score_data.get("score"),
+        "type_recidivistic": bool(score_data.get("score", 0.0) > 0.0),
+        "fix_fix_recidivism": bool(score_data.get("fix_fix_recidivism", False)),
+        "origin_fix_recidivism": bool(score_data.get("origin_fix_recidivism", False)),
     }
 
 
@@ -107,7 +110,7 @@ def main() -> None:
 
                 # Calculate recidivism score
                 score_data = recidivism_for_vulnerability(
-                    vulnerability, cwe_counts, repo_counts
+                    vulnerability, cwe_counts, repo_counts, vulnerabilities
                 )
 
                 # Only write recidivistic vulnerabilities to output
@@ -115,11 +118,9 @@ def main() -> None:
                     skipped_count += 1
                     continue
 
-                # Write to JSONL in the sample recidivism format
                 output_record = build_output_record(vulnerability, score_data)
                 output_handle.write(json.dumps(output_record, sort_keys=True))
                 output_handle.write("\n")
-
                 processed_count += 1
 
                 if processed_count % args.batch_size == 0:

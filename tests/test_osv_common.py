@@ -85,6 +85,49 @@ class OsvCommonTests(unittest.TestCase):
         metric = recidivism_for_vulnerability(vulnerability, {}, {})
         self.assertEqual(metric["base_severity_score"], 5.0)
 
+    def test_version_window_recidivism_detects_fix_fix_and_origin_fix(self) -> None:
+        first = {
+            "id": "A",
+            "database_specific": {"cwe_ids": ["CWE-79"]},
+            "affected": [
+                {
+                    "package": {"ecosystem": "pip", "name": "example"},
+                    "ranges": [{"events": [{"introduced": "0"}, {"fixed": "1.0.0"}]}],
+                }
+            ],
+            "references": [],
+        }
+        second = {
+            "id": "B",
+            "database_specific": {"cwe_ids": ["CWE-79"]},
+            "affected": [
+                {
+                    "package": {"ecosystem": "pip", "name": "example"},
+                    "ranges": [{"events": [{"introduced": "0.9.0"}, {"fixed": "2.0.0"}]}],
+                }
+            ],
+            "references": [],
+        }
+        third = {
+            "id": "C",
+            "database_specific": {"cwe_ids": ["CWE-79"]},
+            "affected": [
+                {
+                    "package": {"ecosystem": "pip", "name": "example"},
+                    "ranges": [{"events": [{"introduced": "2.0.0"}, {"fixed": "3.0.0"}]}],
+                }
+            ],
+            "references": [],
+        }
+
+        metric = recidivism_for_vulnerability(first, {}, {}, [first, second, third])
+        self.assertTrue(metric["fix_fix_recidivism"])
+        self.assertFalse(metric["origin_fix_recidivism"])
+
+        origin_metric = recidivism_for_vulnerability(third, {}, {}, [first, second, third])
+        self.assertFalse(origin_metric["fix_fix_recidivism"])
+        self.assertTrue(origin_metric["origin_fix_recidivism"])
+
 
 if __name__ == "__main__":
     unittest.main()
